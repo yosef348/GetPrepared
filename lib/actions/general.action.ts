@@ -112,6 +112,8 @@ export async function getLatestInterviews(
 export async function getInterviewsByUserId(
   userId: string
 ): Promise<Interview[] | null> {
+  if(!userId) return null;
+  
   const interviews = await db
     .collection("interviews")
     .where("userId", "==", userId)
