@@ -10,8 +10,9 @@ export async function POST(req: Request) {
     ) {
       const args = body.functionCall.arguments;
 
+      // Correct workflow execution endpoint
       const vapiRes = await fetch(
-        `https://api.vapi.ai/v1/calls/create`, 
+        `https://api.vapi.ai/v1/workflows/${process.env.VAPI_WORKFLOW_ID}/execute`,
         {
           method: "POST",
           headers: {
@@ -19,7 +20,6 @@ export async function POST(req: Request) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            workflowId: process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID,
             input: {
               role: args.role,
               type: args.type,
