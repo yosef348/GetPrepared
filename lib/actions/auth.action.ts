@@ -2,6 +2,7 @@
 
 import { auth, db } from "@/firebase/admin";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 // Session duration (1 week)
 const SESSION_DURATION = 60 * 60 * 24 * 7;
@@ -79,6 +80,8 @@ export async function signIn(params: SignInParams) {
       };
 
     await setSessionCookie(idToken);
+
+    redirect("/");
   } catch (error: any) {
     console.log("");
 
@@ -127,6 +130,7 @@ export async function getCurrentUser(): Promise<User | null> {
 
 // Check if user is authenticated
 export async function isAuthenticated() {
-  const user = await getCurrentUser();
-  return !!user;
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session");
+  return !!sessionCookie;
 }

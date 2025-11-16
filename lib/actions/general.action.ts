@@ -90,24 +90,27 @@ export async function getFeedbackByInterviewId(
   return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
 }
 
-export async function getLatestInterviews(
-  params: GetLatestInterviewsParams
-): Promise<Interview[] | null> {
+export async function getLatestInterviews(params: GetLatestInterviewsParams) {
   const { userId, limit = 20 } = params;
 
-  const interviews = await db
+  let ref = db
     .collection("interviews")
     .orderBy("createdAt", "desc")
     .where("finalized", "==", true)
-    .where("userId", "!=", userId)
-    .limit(limit)
-    .get();
+    .limit(limit);
+    
+  if (userId !== undefined && userId !== null) {
+    ref = ref.where("userId", "!=", userId);
+  }
+
+  const interviews = await ref.get();
 
   return interviews.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
   })) as Interview[];
 }
+
 
 export async function getInterviewsByUserId(
   userId: string
