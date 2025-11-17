@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-
     console.log("Webhook received:", body);
 
     if (body.type !== "tool-calls") {
@@ -13,6 +12,8 @@ export async function POST(req: Request) {
     const { toolName, parameters, toolCallId } = body;
 
     if (toolName === "startInterviewWorkflow") {
+      console.log("Executing startInterviewWorkflow with:", parameters);
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/api/vapi/generate`,
         {
@@ -23,20 +24,34 @@ export async function POST(req: Request) {
       );
 
       const result = await response.json();
+      console.log("Generate API result:", result);
 
+      // IMPORTANT: YOU MUST return toolCallId + result
       return NextResponse.json(
         {
-          toolCallId,
-          result,
+          toolCallId, 
+          result
         },
         { status: 200 }
       );
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });
+
   } catch (error) {
     console.error("Webhook error:", error);
-    return NextResponse.json({ error: "Webhook crashed" }, { status: 200 });
+
+    // Even errors must return a result OR Vapi thinks there's "no result"
+    return NextResponse.json(
+      {
+        toolCallId: "unknown",
+        result: {
+          success: false,
+          error: String(error)
+        }
+      },
+      { status: 200 }
+    );
   }
 }
 
