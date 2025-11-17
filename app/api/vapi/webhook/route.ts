@@ -3,17 +3,16 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    console.log("Webhook received:", body);
 
+    // Only process tool calls
     if (body.type !== "tool-calls") {
-      return NextResponse.json({ ok: true }, { status: 200 });
+      return NextResponse.json({ ok: true });
     }
 
-    const { toolName, parameters, toolCallId } = body;
+    const { toolName, toolCallId, parameters } = body;
 
     if (toolName === "startInterviewWorkflow") {
-      console.log("Executing startInterviewWorkflow with:", parameters);
-
+      // Call your generate API
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_BASE_URL}/api/vapi/generate`,
         {
@@ -24,37 +23,24 @@ export async function POST(req: Request) {
       );
 
       const result = await response.json();
-      console.log("Generate API result:", result);
 
-      // IMPORTANT: YOU MUST return toolCallId + result
-      return NextResponse.json(
-        {
-          toolCallId, 
-          result
-        },
-        { status: 200 }
-      );
+      // Return result back to Vapi
+      return NextResponse.json({
+        toolCallId,
+        result,
+      });
     }
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error(err);
 
-  } catch (error) {
-    console.error("Webhook error:", error);
-
-    // Even errors must return a result OR Vapi thinks there's "no result"
     return NextResponse.json(
       {
         toolCallId: "unknown",
-        result: {
-          success: false,
-          error: String(error)
-        }
+        result: { success: false, error: String(err) },
       },
       { status: 200 }
     );
   }
-}
-
-export async function GET() {
-  return NextResponse.json({ ok: true }, { status: 200 });
 }
