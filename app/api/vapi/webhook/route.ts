@@ -1,50 +1,45 @@
+import { NextResponse } from "next/server";
 
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
 
-import { NextApiRequest, NextApiResponse } from "next";
+    console.log("Webhook received:", body);
 
-const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
-
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const event = req.body;
-
-  // When the call starts → trigger workflow
-  if (event.event === "call.started") {
-    await fetch(`https://api.vapi.ai/v1/workflows/${workflowId}/execute`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        userId: event.call.userId,
-        callId: event.call.id,
-      })
-    });
-  }
-
-  // When your workflow API step calls back → handle it
-  if (event.event === "tool.called") {
-    if (event.tool.name === "apiRequest") {
-      const extracted = event.tool.input;
-
-      // Send to Gemini
-      const geminiResponse = await fetch("YOUR_GEMINI_ENDPOINT", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(extracted)
-      }).then(r => r.json());
-
-      // Save to Firebase
-      await saveToFirebase({
-        ...extracted,
-        result: geminiResponse
-      });
+    if (body.type !== "tool-calls") {
+      return NextResponse.json({ ok: true }, { status: 200 });
     }
-  }
 
-  return res.status(200).json({ ok: true });
+    const { toolName, parameters, toolCallId } = body;
+
+    if (toolName === "startInterviewWorkflow") {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/vapi/generate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parameters),
+        }
+      );
+
+      const result = await response.json();
+
+      return NextResponse.json(
+        {
+          toolCallId,
+          result,
+        },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  } catch (error) {
+    console.error("Webhook error:", error);
+    return NextResponse.json({ error: "Webhook crashed" }, { status: 200 });
+  }
 }
 
-async function saveToFirebase(data: any) {
-  // your Firebase logic here
+export async function GET() {
+  return NextResponse.json({ ok: true }, { status: 200 });
 }
