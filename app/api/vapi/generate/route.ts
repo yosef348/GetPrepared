@@ -1,51 +1,56 @@
-import { generateText } from "ai";
-import { google } from "@ai-sdk/google";
+import { NextResponse } from "next/server";
 
-import { db } from "@/firebase/admin";
-import { getRandomInterviewCover } from "@/lib/utils";
-
-export async function POST(request: Request) {
-  const { type, role, level, techstack, amount, userid } = await request.json();
-
+export async function POST(req: Request) {
   try {
-    const { text: questions } = await generateText({
-      model: google("gemini-2.0-flash-001"),
-      prompt: `Prepare questions for a job interview.
-        The job role is ${role}.
-        The job experience level is ${level}.
-        The tech stack used in the job is: ${techstack}.
-        The focus between behavioural and technical questions should lean towards: ${type}.
-        The amount of questions required is: ${amount}.
-        Please return only the questions, without any additional text.
-        The questions are going to be read by a voice assistant so do not use "/" or "*" or any other special characters which might break the voice assistant.
-        Return the questions formatted like this:
-        ["Question 1", "Question 2", "Question 3"]
-        
-        Thank you! <3
-    `,
-    });
+    const body = await req.json();
 
-    const interview = {
-      role: role,
-      type: type,
-      level: level,
-      techstack: techstack.split(","),
-      questions: JSON.parse(questions),
-      userId: userid,
-      finalized: true,
-      coverImage: getRandomInterviewCover(),
-      createdAt: new Date().toISOString(),
-    };
+    console.log("Webhook received:", body);
 
-    await db.collection("interviews").add(interview);
+    // Vapi always sends { type: "tool-calls" }
+    if (body.type !== "tool-calls") {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
 
-    return Response.json({ success: true }, { status: 200 });
+    const { toolName, parameters, toolCallId } = body;
+
+    // Handle your tool call
+    if (toolName === "startInterviewWorkflow") {
+      console.log("Running startInterviewWorkflow with:", parameters);
+
+      // Forward the parameters to your existing API generate handler
+      const apiResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/vapi/generate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(parameters),
+        }
+      );
+
+      const result = await apiResponse.json();
+
+      console.log("Result from /generate:", result);
+
+      // Tell Vapi the tool result is ready
+      return NextResponse.json(
+        {
+          toolCallId,
+          result,
+        },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error("Error:", error);
-    return Response.json({ success: false, error: error }, { status: 500 });
-  }
-}
+    console.error("Webhook Error:", error);
 
-export async function GET() {
-  return Response.json({ success: true, data: "Thank you!" }, { status: 200 });
+    return NextResponse.json(
+      {
+        error: "Webhook crashed",
+        detail: String(error),
+      },
+      { status: 200 } // ⚠ return 200 so Vapi doesn't retry
+    );
+  }
 }

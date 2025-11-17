@@ -1,45 +1,50 @@
-import { NextResponse } from "next/server";
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
 
-    if (
-      body.type === "function_call" &&
-      body.functionCall?.name === "startInterviewWorkflow"
-    ) {
-      const args = body.functionCall.arguments;
+import { NextApiRequest, NextApiResponse } from "next";
 
-      // Correct workflow execution endpoint
-      const vapiRes = await fetch(
-        `https://api.vapi.ai/v1/workflows/${process.env.VAPI_WORKFLOW_ID}/execute`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            input: {
-              role: args.role,
-              type: args.type,
-              level: args.level,
-              techstack: args.techstack,
-              amount: args.amount,
-            },
-          }),
-        }
-      );
+const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
 
-      const vapiJson = await vapiRes.json();
-      console.log("Vapi workflow execution response:", vapiJson);
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const event = req.body;
 
-      return NextResponse.json({ ok: true, vapiResponse: vapiJson });
-    }
-
-    return NextResponse.json({ ok: false, error: "Unknown function call" }, { status: 400 });
-  } catch (err) {
-    console.error("Webhook error:", err);
-    return NextResponse.json({ ok: false, error: (err as any).message }, { status: 500 });
+  // When the call starts → trigger workflow
+  if (event.event === "call.started") {
+    await fetch(`https://api.vapi.ai/v1/workflows/${workflowId}/execute`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.VAPI_PRIVATE_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        userId: event.call.userId,
+        callId: event.call.id,
+      })
+    });
   }
+
+  // When your workflow API step calls back → handle it
+  if (event.event === "tool.called") {
+    if (event.tool.name === "apiRequest") {
+      const extracted = event.tool.input;
+
+      // Send to Gemini
+      const geminiResponse = await fetch("YOUR_GEMINI_ENDPOINT", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(extracted)
+      }).then(r => r.json());
+
+      // Save to Firebase
+      await saveToFirebase({
+        ...extracted,
+        result: geminiResponse
+      });
+    }
+  }
+
+  return res.status(200).json({ ok: true });
+}
+
+async function saveToFirebase(data: any) {
+  // your Firebase logic here
 }
